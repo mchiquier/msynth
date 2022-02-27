@@ -1,0 +1,9 @@
+LICENSE.txt
+README.md
+setup.py
+msynth/__init__.py
+msynth/version.py
+msynth.egg-info/PKG-INFO
+msynth.egg-info/SOURCES.txt
+msynth.egg-info/dependency_links.txt
+msynth.egg-info/top_level.txt
