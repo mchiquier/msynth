@@ -1,0 +1,24 @@
+{
+    "os": "Linux-4.15.0-166-generic-x86_64-with-debian-buster-sid",
+    "python": "3.7.6",
+    "heartbeatAt": "2022-03-07T21:12:26.172406",
+    "startedAt": "2022-03-07T21:12:24.307065",
+    "docker": null,
+    "gpu": "GeForce RTX 2080 Ti",
+    "gpu_count": 8,
+    "cpu_count": 40,
+    "cuda": "11.0.228",
+    "args": [],
+    "state": "running",
+    "program": "test_gradgeneral.py",
+    "codePath": "tests/test_gradgeneral.py",
+    "git": {
+        "remote": "git@github.com:mchiquier/msynth.git",
+        "commit": "89f479de978b2392c446b6a943be406d3d2707c7"
+    },
+    "email": "mia.chiquier@gmail.com",
+    "root": "/proj/vondrick/mia/msynth",
+    "host": "cv02",
+    "username": "mia.chiquier",
+    "executable": "/opt/Anaconda3-5.3.0/bin/python"
+}

@@ -13,7 +13,7 @@ import einops
 import pdb
 import os
 import soundfile as sf
-
+import wandb
 
 
 def sampler(controls, samples): #(16,1,4)
@@ -35,21 +35,20 @@ def get_melspec(audio):
 class FunctionWithNumericalGrad(torch.autograd.Function):
     
     @staticmethod
-    def forward(cxt, synth_params, samples):
-        cxt.save_for_backward(synth_params,samples)
+    def forward(cxt, synth_params, samples, epsilon):
+        cxt.save_for_backward(synth_params,samples, epsilon)
         # do forward process
         synth_signal = sampler(synth_params, samples)
-        print(synth_params)
 
         return synth_signal
 
     @staticmethod
-    def backward(cxt, grad_output):
+    def backward(cxt, grad_output): 
 
-        epsilon = 0.0001 
 
         synth_params = cxt.saved_tensors[0]
         samples = cxt.saved_tensors[1]
+        epsilon = cxt.saved_tensors[2].numpy()
 
         # generate random vector of +-1s, #delta_k = rademacher(synth_params.shape).numpy()
         delta_k= np.random.randint(0,high=2,size=synth_params.shape)
@@ -62,6 +61,7 @@ class FunctionWithNumericalGrad(torch.autograd.Function):
 
         grad_synth = grad_synth.reshape(-1)
         delta_k = delta_k.reshape(-1) 
+        print(delta_k)
 
         # loop for each element of synth_params
         params_sublist = []
@@ -71,16 +71,23 @@ class FunctionWithNumericalGrad(torch.autograd.Function):
 
         grad_synth = torch.tensor(params_sublist).reshape(synth_params.shape)
 
-        return grad_synth, None
+        #for i in range(len(params_sublist)):
+        #    wandb.log({"param_" + str(i) + "_predicted_grad" :  params_sublist[i]})
 
-def load_samples_and_resynthesized(path_to_musicfiles):
+        return grad_synth, None, None
+
+def load_samples_and_resynthesized(path_to_musicfiles, num_notes):
     list_of_notes = ["47.wav","44.wav","42.wav","40.wav"]
     song=["mary.wav"]
 
+    
     ground_truth = torch.tensor([[0,1,0,0],[0,0,1,0],[0,0,0,1],[0,0,1,0],
         [0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0],
         [0,0,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0],[1,0,0,0],
         [1,0,0,0],[1,0,0,0],[1,0,0,0]]).type(torch.DoubleTensor)
+
+    ground_truth = ground_truth[:num_notes]
+
         
     audio_d,sr = torchaudio.load(path_to_musicfiles + list_of_notes[0])
     audio_b,sr = torchaudio.load(path_to_musicfiles + list_of_notes[1])
@@ -89,7 +96,7 @@ def load_samples_and_resynthesized(path_to_musicfiles):
 
     samples = torch.cat([torch.unsqueeze(audio_d,dim=0),torch.unsqueeze(audio_b,dim=0),
     torch.unsqueeze(audio_a,dim=0),torch.unsqueeze(audio_g,dim=0)],dim=0) #(4,1,29106)
-    samples = samples.permute((1,0,2)).repeat(16,1,1).type(torch.DoubleTensor) #(16,4,29106)
+    samples = samples.permute((1,0,2)).repeat(num_notes,1,1).type(torch.DoubleTensor) #(16,4,29106)
     song=["mary.wav"]
     mary,sr = torchaudio.load("../data/musicfiles/" + song[0])
     resynthesized_mary = sampler(torch.unsqueeze(ground_truth,dim=1),samples)
@@ -98,8 +105,11 @@ def load_samples_and_resynthesized(path_to_musicfiles):
 
 def train():
 
-    samples, resynthesized_mary, ground_truth = load_samples_and_resynthesized("../data/musicfiles/")
-    model = modeleff.EfficientNet.from_name('efficientnet-b0') 
+    num_notes=1
+    epsilon=torch.tensor([0.0001])
+    wandb.init(name="epsilon_" + str(epsilon.numpy()[0]))
+    samples, resynthesized_mary, ground_truth = load_samples_and_resynthesized("../data/musicfiles/", num_notes)
+    model = modeleff.EfficientNet.from_name('efficientnet-b0',num_notes=num_notes) 
         
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
 
@@ -109,16 +119,22 @@ def train():
     loss = torch.nn.MSELoss()
     log_mel_spec_mary = get_melspec(resynthesized_mary.type(torch.FloatTensor))
 
-    for i in range(5):
+    for i in range(300):
 
         optimizer.zero_grad()
-        pdb.set_trace()
+        
+
         feats = model.extract_features(torch.unsqueeze(log_mel_spec_mary,dim=0))[0] #(4,1,16)
-        print("ground_truth: ",ground_truth_matrix)
         feats=feats.permute((2,1,0)) #(16,1,4)
         output = torch.nn.functional.sigmoid(feats*10).type(torch.DoubleTensor)
 
-        synthesized_audio = FunctionWithNumericalGrad.apply(output, samples)
+        output_reshaped = output.reshape(-1)
+        ground_truth_reshaped = ground_truth_matrix.reshape(-1)
+        for i in range(len(output_reshaped)):
+            wandb.log({"param_" + str(i) + "_predicted" :  output_reshaped[i]})
+            wandb.log({"param_" + str(i) + "_gt" :  ground_truth_reshaped[i]})
+
+        synthesized_audio = FunctionWithNumericalGrad.apply(output, samples, epsilon)
         
         log_mel_spec_concat = get_melspec(synthesized_audio)
 
@@ -126,6 +142,8 @@ def train():
         loss_val.backward()
 
         optimizer.step()
+
+        wandb.log({"loss":loss_val.detach().cpu().numpy()})
 
         print("Loss is: ", loss_val)
 
