@@ -1,0 +1,10 @@
+wandb_version: 1
+
+epsilon:
+  value: 0.09778282636398214
+learning_rate:
+  value: 0.028747538187370976
+num_avg:
+  value: 6.755959210817346
+num_notes:
+  value: 13.906715949776858

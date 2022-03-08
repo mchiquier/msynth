@@ -1,0 +1,1 @@
+TypeError: bmm(): argument 'input' (position 1) must be Tensor, not torch.return_types.min
