@@ -2,7 +2,15 @@
 
 We are using a python package. Therefore, please run : pip install -e msynth , in the directory that is the parent of the msynth folder. 
 
+To run a sweep, run: 
 
+wandb sweep sweep.yaml 
+
+This will return a sweep id. 
+
+wandb agent [your wandb username] / [the project] / [the id given to you by the first command above]
+
+For me thats: wandb agent chiquita/msynth-tests/[id]
 
 ## Developer
 
