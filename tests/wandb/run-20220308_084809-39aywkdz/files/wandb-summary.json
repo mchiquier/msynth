@@ -1,1 +1,0 @@
-{"param_0_predicted": 1.2812977241705159e-11, "_runtime": 13, "_timestamp": 1646747302, "_step": 493, "param_0_gt": 0.0, "param_1_predicted": 0.9997319579124451, "param_1_gt": 1.0, "param_2_predicted": 4.297768941403067e-14, "param_2_gt": 0.0, "param_3_predicted": 6.455318725784309e-06, "param_3_gt": 0.0, "loss": 1.4496792211105003e-08}
