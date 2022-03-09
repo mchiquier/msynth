@@ -9,6 +9,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+import pdb
 from .utils import (
     round_filters,
     round_repeats,
@@ -160,7 +161,7 @@ class EfficientNet(nn.Module):
         >>> outputs = model(inputs)
     """
 
-    def __init__(self, blocks_args=None, global_params=None):
+    def __init__(self, blocks_args=None, global_params=None, num_notes=2, freqversion=True):
         super().__init__()
         assert isinstance(blocks_args, list), 'blocks_args should be a list'
         assert len(blocks_args) > 0, 'block args must be greater than 0'
@@ -176,7 +177,7 @@ class EfficientNet(nn.Module):
         Conv2d = get_same_padding_conv2d(image_size=image_size)
 
         # Stem
-        in_channels = 3  # rgb
+        in_channels = 1  # rgb
         out_channels = round_filters(32, self._global_params)  # number of output channels
         self._conv_stem = Conv2d(in_channels, out_channels, kernel_size=3, stride=2, bias=False)
         self._bn0 = nn.BatchNorm2d(num_features=out_channels, momentum=bn_mom, eps=bn_eps)
@@ -184,6 +185,7 @@ class EfficientNet(nn.Module):
 
         # Build blocks
         self._blocks = nn.ModuleList([])
+        self.freqversion = freqversion
         for block_args in self._blocks_args:
 
             # Update block input and output filters based on depth multiplier.
@@ -208,11 +210,15 @@ class EfficientNet(nn.Module):
         Conv2d = get_same_padding_conv2d(image_size=image_size)
         self._conv_head = Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
         self._bn1 = nn.BatchNorm2d(num_features=out_channels, momentum=bn_mom, eps=bn_eps)
-        self._conv_1by1 = Conv2d(out_channels, 4, kernel_size=1, stride=1, bias=False)
-
+        #self._conv_1by1 = Conv2d(out_channels, 1, kernel_size=1, stride=1, bias=False)
+        if not self.freqversion:
+            self._conv_1by1 = Conv2d(out_channels, 4, kernel_size=1, stride=1, bias=False)
+        else:
+            self._conv_1by1 = Conv2d(out_channels, 1, kernel_size=1, stride=1, bias=False)
         # Final linear layer
         self._avg_pooling = nn.AdaptiveAvgPool2d(1)
-        self._avg_pooling2 = nn.AdaptiveAvgPool2d((1,16))
+        self._avg_pooling2 = nn.AdaptiveAvgPool2d((1,num_notes))
+        #self._avg_pooling2 = nn.AdaptiveAvgPool2d((1,16))
         # Final linear layer
         if self._global_params.include_top:
             self._dropout = nn.Dropout(self._global_params.dropout_rate)
@@ -300,9 +306,10 @@ class EfficientNet(nn.Module):
 
         # Head
         x = self._swish(self._bn1(self._conv_head(x)))
-        x=self._avg_pooling2(x)
+        #pdb.set_trace()
+        if not self.freqversion:
+            x=self._avg_pooling2(x)
         x=self._conv_1by1(x)
-
         return x
 
     def forward(self, inputs):
@@ -326,7 +333,7 @@ class EfficientNet(nn.Module):
         return x
 
     @classmethod
-    def from_name(cls, model_name, in_channels=3, **override_params):
+    def from_name(cls, model_name, num_notes=16, freqversion=True, in_channels=3, **override_params):
         """Create an efficientnet model according to name.
 
         Args:
@@ -346,7 +353,7 @@ class EfficientNet(nn.Module):
         """
         cls._check_model_name_is_valid(model_name)
         blocks_args, global_params = get_model_params(model_name, override_params)
-        model = cls(blocks_args, global_params)
+        model = cls(blocks_args, global_params, num_notes, freqversion)
         model._change_in_channels(in_channels)
         return model
 
