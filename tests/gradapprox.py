@@ -99,20 +99,25 @@ class FunctionWithNumericalGrad(torch.autograd.Function):
 
 
 def train():
+
+    log_wandb = True
    
     theconfig = {"epsilon": 0.001, 
     "num_notes": 16, 
     "num_avg": 20, 
     "learning_rate": 0.001, 
     "recurrent": True, 
-    "recurrent_aggreegate": False,
+    "recurrent_aggregate": False,
     "apply_softmax": False,
     "real_gradient": True,
     "num_iterations": 500}
     
-    wandb.init(config=theconfig)
+    if log_wandb:
+        wandb.init(config=theconfig)
+        config = wandb.config
+    else:
+        config = theconfig 
 
-    config = wandb.config
     num_notes= int(config.num_notes)
     num_avg=int(config.num_avg)
     epsilon=config.epsilon
@@ -188,8 +193,9 @@ def train():
         loss_val.backward()
 
         optimizer.step()
-
-        wandb.log({"reconstruction loss" : loss_val.detach().cpu().numpy(),"iteration": k})
+        
+        if log_wandb: 
+            wandb.log({"reconstruction loss" : loss_val.detach().cpu().numpy(),"iteration": k})
 
         print("Loss is: ", loss_val)
 
