@@ -107,7 +107,8 @@ def train():
     "recurrent": True, 
     "recurrent_aggreegate": False,
     "apply_softmax": False,
-    "real_gradient": True}
+    "real_gradient": True,
+    "num_iterations": 500}
     
     wandb.init(config=theconfig)
 
@@ -120,6 +121,7 @@ def train():
     recurrent = config.recurrent
     apply_softmax = config.apply_softmax
     real_gradient = config.real_gradient
+    num_iterations = config.num_iterations
 
     ground_truth = torch.tensor([[0,1,0,0],[0,0,1,0],[0,0,0,1],[0,0,1,0],
         [0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0],
@@ -144,18 +146,18 @@ def train():
     if not os.path.isdir("reconstruction"):
         os.mkdir("reconstruction")
 
-    for k in range(500): 
+    for k in range(num_iterations): 
         print(k)
         
         optimizer.zero_grad()
         
         if recurrent: 
             list_of_output=[]           
-            for j in range(16):
+            for j in range(num_notes):
                 thenote, samples = synthesize("../data/musicfiles/", torch.unsqueeze(ground_truth[j],dim=0))
                 log_mel_spec_note = get_melspec(thenote.type(torch.FloatTensor))
-                feats = model.extract_features(torch.unsqueeze(log_mel_spec_note,dim=0))[0] #(4,1,16)
-                feats=feats.permute((2,1,0)) #(16,1,4)
+                feats = model.extract_features(torch.unsqueeze(log_mel_spec_note,dim=0))[0] 
+                feats=feats.permute((2,1,0)) 
                 output = sigmoid(10*feats).type(torch.DoubleTensor)
                 if apply_softmax:
                     output = softmax(output)
