@@ -132,10 +132,16 @@ def train():
         [0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0],
         [0,0,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0],[1,0,0,0],
         [1,0,0,0],[1,0,0,0],[1,0,0,0]]).type(torch.DoubleTensor)
+    
  
     resynthesized_mary, samples = synthesize("../data/musicfiles/", ground_truth[:num_notes])
     log_mel_spec_mary = get_melspec(resynthesized_mary.type(torch.FloatTensor))
 
+    if log_wandb: 
+        wandb.log({"ground-truth pitch-time":wandb.Table(data=ground_truth.detach().cpu().tolist(), columns=["47","44","42","40"])})
+        wandb.log({"ground_truth audio": wandb.Audio(resynthesized_mary[0].detach().cpu().numpy(), caption="ground truth audio", sample_rate=44100)})
+        wandb.log({"ground-truth melspec": wandb.Image(log_mel_spec_mary[0].cpu().detach().numpy(), caption="GT Melspec")})
+    
     if recurrent:
         model = modeleff.EfficientNet.from_name('efficientnet-b0',num_notes=1) 
     else:
@@ -157,38 +163,49 @@ def train():
         optimizer.zero_grad()
         
         if recurrent: 
-            list_of_output=[]           
+            list_of_audio=[]   
+            list_of_controls=[]        
             for j in range(num_notes):
                 thenote, samples = synthesize("../data/musicfiles/", torch.unsqueeze(ground_truth[j],dim=0))
                 log_mel_spec_note = get_melspec(thenote.type(torch.FloatTensor))
-                feats = model.extract_features(torch.unsqueeze(log_mel_spec_note,dim=0))[0] 
-                feats=feats.permute((2,1,0)) 
-                output = sigmoid(10*feats).type(torch.DoubleTensor)
+                controls = model.extract_features(torch.unsqueeze(log_mel_spec_note,dim=0))[0] 
+                controls=controls.permute((2,1,0)) 
+                controls = sigmoid(10*controls).type(torch.DoubleTensor)
                 if apply_softmax:
-                    output = softmax(output)
+                    controls = softmax(controls)
 
                 if real_gradient:
-                    curr_audio = sampler(output, samples)
+                    curr_audio = sampler(controls, samples)
                 else:
-                    curr_audio = FunctionWithNumericalGrad.apply(output, samples, torch.tensor([epsilon]), torch.tensor([num_avg]))
+                    curr_audio = FunctionWithNumericalGrad.apply(controls, samples, torch.tensor([epsilon]), torch.tensor([num_avg]))
             
-                list_of_output.append(curr_audio)
-            synthesized_audio = torch.cat(list_of_output,dim=1)
+                list_of_audio.append(curr_audio)
+                list_of_controls.append(controls)
+                
+            controls = torch.cat(list_of_controls,dim=0) #(16,1,4)
+            synthesized_audio = torch.cat(list_of_audio,dim=1)
         
         else: 
-            feats = model.extract_features(torch.unsqueeze(log_mel_spec_mary,dim=0))[0] #(4,1,16)
-            feats=feats.permute((2,1,0)) #(16,1,4)
-            output = sigmoid(feats*10).type(torch.DoubleTensor)
+            controls = model.extract_features(torch.unsqueeze(log_mel_spec_mary,dim=0))[0] #(4,1,16)
+            controls=controls.permute((2,1,0)) #(16,1,4)
+            controls = sigmoid(controls*10).type(torch.DoubleTensor)
             if apply_softmax:
-                output = softmax(output)
+                controls = softmax(controls)
 
             if real_gradient:
-                synthesized_audio = sampler(output, samples)
+                synthesized_audio = sampler(controls, samples)
             else:
-                synthesized_audio = FunctionWithNumericalGrad.apply(output, samples, torch.tensor([epsilon]), torch.tensor([num_avg]))
-        
+                synthesized_audio = FunctionWithNumericalGrad.apply(controls, samples, torch.tensor([epsilon]), torch.tensor([num_avg]))
+
         log_mel_spec_concat = get_melspec(synthesized_audio)
 
+        if log_wandb and k%20==0:
+                wandb.log({"predicted pitch-time":wandb.Table(data=controls[:,0,:].detach().cpu().tolist(), columns=["47","44","42","40"])})
+                wandb.log({"difference pitch-time":wandb.Table(data=(ground_truth-controls[:,0,:]).detach().cpu().tolist(), columns=["47","44","42","40"])})
+                wandb.log({"reconstructed audio": wandb.Audio(synthesized_audio[0].detach().cpu().numpy(), caption="reconstructed audio " + str(k), sample_rate=44100)})
+                wandb.log({"predicted melspec": wandb.Image(log_mel_spec_concat[0].cpu().detach().numpy(), caption="Predicted Melspec  " + str(k))})
+                wandb.log({"difference melspec": wandb.Image(log_mel_spec_concat[0].cpu().detach().numpy()-log_mel_spec_mary[0].cpu().detach().numpy(), caption="Predicted Melspec  " + str(k))})
+        
         loss_val = loss(log_mel_spec_concat,log_mel_spec_mary)
         loss_val.backward()
 
