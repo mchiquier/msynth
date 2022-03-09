@@ -110,7 +110,7 @@ def train():
     "recurrent_aggregate": False,
     "apply_softmax": False,
     "real_gradient": True,
-    "num_iterations": 500}
+    "num_iterations": 600}
     
     if log_wandb:
         wandb.init(config=theconfig)
