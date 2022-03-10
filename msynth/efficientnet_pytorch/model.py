@@ -161,12 +161,15 @@ class EfficientNet(nn.Module):
         >>> outputs = model(inputs)
     """
 
-    def __init__(self, blocks_args=None, global_params=None, num_notes=2, freqversion=True):
+    def __init__(self, blocks_args=None, global_params=None, num_notes=2, freqversion=True, reshapeversion=False, avgpoolversion=False):
         super().__init__()
         assert isinstance(blocks_args, list), 'blocks_args should be a list'
         assert len(blocks_args) > 0, 'block args must be greater than 0'
         self._global_params = global_params
         self._blocks_args = blocks_args
+        self.num_notes = num_notes
+        self.reshapeversion=reshapeversion
+        self.avgpoolversion = avgpoolversion
 
         # Batch norm parameters
         bn_mom = 1 - self._global_params.batch_norm_momentum
@@ -206,23 +209,27 @@ class EfficientNet(nn.Module):
 
         # Head
         in_channels = block_args.output_filters  # output of final block
-        out_channels = round_filters(1280, self._global_params)
+        if self.freqversion:
+            out_channels = round_filters(1280, self._global_params) #round_filters(1280, self._global_params)
+        else:
+            out_channels = round_filters(512, self._global_params)
         Conv2d = get_same_padding_conv2d(image_size=image_size)
         self._conv_head = Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
         self._bn1 = nn.BatchNorm2d(num_features=out_channels, momentum=bn_mom, eps=bn_eps)
-        #self._conv_1by1 = Conv2d(out_channels, 1, kernel_size=1, stride=1, bias=False)
-        if not self.freqversion:
-            self._conv_1by1 = Conv2d(out_channels, 4, kernel_size=1, stride=1, bias=False)
-        else:
+
+        if self.freqversion:
             self._conv_1by1 = Conv2d(out_channels, 1, kernel_size=1, stride=1, bias=False)
+        if self.avgpoolversion:
+            self._conv_1by1 = Conv2d(out_channels, 4, kernel_size=1, stride=1, bias=False)
         # Final linear layer
         self._avg_pooling = nn.AdaptiveAvgPool2d(1)
         self._avg_pooling2 = nn.AdaptiveAvgPool2d((1,num_notes))
-        #self._avg_pooling2 = nn.AdaptiveAvgPool2d((1,16))
         # Final linear layer
         if self._global_params.include_top:
             self._dropout = nn.Dropout(self._global_params.dropout_rate)
             self._fc = nn.Linear(out_channels, self._global_params.num_classes)
+
+        self._fcfinal = nn.Linear(512*4*self.num_notes, 4*self.num_notes)
 
         # set activation to memory efficient swish by default
         self._swish = MemoryEfficientSwish()
@@ -306,11 +313,24 @@ class EfficientNet(nn.Module):
 
         # Head
         x = self._swish(self._bn1(self._conv_head(x)))
-        #pdb.set_trace()
-        if not self.freqversion:
+        
+        if self.reshapeversion:
+            #pdb.set_trace()
+            #x = x.transpose(1, 2).flatten(-2)    
+            #print(x.shape)  
+            x=x.reshape(1,-1)      
+            x = self._fcfinal(x)
+            #pdb.set_trace()
+            #x=self._avg_pooling2(x)
+            return torch.unsqueeze(torch.unsqueeze(x,dim=2),dim=3)
+        if self.freqversion:
+            #x=self._avg_pooling2(x)
+            x=self._conv_1by1(x)
+            return x
+        if self.avgpoolversion:
             x=self._avg_pooling2(x)
-        x=self._conv_1by1(x)
-        return x
+            x=self._conv_1by1(x)
+            return x
 
     def forward(self, inputs):
         """EfficientNet's forward function.
@@ -333,7 +353,7 @@ class EfficientNet(nn.Module):
         return x
 
     @classmethod
-    def from_name(cls, model_name, num_notes=16, freqversion=True, in_channels=3, **override_params):
+    def from_name(cls, model_name, num_notes=16, freqversion=True, reshapeversion=False, avgpoolversion=False, in_channels=3, **override_params):
         """Create an efficientnet model according to name.
 
         Args:
@@ -353,7 +373,7 @@ class EfficientNet(nn.Module):
         """
         cls._check_model_name_is_valid(model_name)
         blocks_args, global_params = get_model_params(model_name, override_params)
-        model = cls(blocks_args, global_params, num_notes, freqversion)
+        model = cls(blocks_args, global_params, num_notes, freqversion, reshapeversion, avgpoolversion)
         model._change_in_channels(in_channels)
         return model
 
