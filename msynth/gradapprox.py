@@ -4,9 +4,10 @@ import librosa
 import matplotlib.pyplot as plt
 import json
 from PIL import Image 
+from scipy.io.wavfile import write
 import torch
 from librosa.filters import mel as librosa_mel_fn
-import msynth.efficientnet_pytorch.model as modeleff
+import msynth.models.model as modeleff
 from torch.autograd import Variable
 import torchaudio 
 import einops 
@@ -23,25 +24,81 @@ fs = fluidsynth.Synth()
 ## Your installation of FluidSynth may require a different driver.
 ## Use something like:
 # fs.start(driver="pulseaudio")
-print(os.listdir("../"))
-sfid = fs.sfload("../soundfonts/piano.sf2")
+sfid = fs.sfload("../data/soundfonts/piano.sf2")
 fs.program_select(0, sfid, 0, 0) #pick the instrument
 
+   
+"""notes=[47,44,42,40]
+fs.noteon(0, notes[0], 120) #channel, pitch, velocity
+s = fs.get_samples(int(14553.0))
+audio_d = torch.tensor([s.astype(np.float32, order='C') / 32768.0]) 
+fs.noteoff(0, notes[0])
 
+fs.noteon(0, notes[1], 120) #channel, pitch, velocity
+s = fs.get_samples(int(14553.0))
+audio_b=torch.tensor([s.astype(np.float32, order='C') / 32768.0])
+fs.noteoff(0, notes[1])
+
+fs.noteon(0, notes[2], 120) #channel, pitch, velocity
+s = fs.get_samples(int(14553.0))
+audio_a = torch.tensor([s.astype(np.float32, order='C') / 32768.0])  
+fs.noteoff(0, notes[2])
+
+fs.noteon(0, notes[3], 120) #channel, pitch, velocity
+s = fs.get_samples(int(14553.0))
+audio_g = torch.tensor([s.astype(np.float32, order='C') / 32768.0]) 
+fs.noteoff(0, notes[3])
+
+samplestwo = torch.cat([torch.unsqueeze(audio_d,dim=0),torch.unsqueeze(audio_b,dim=0),
+    torch.unsqueeze(audio_a,dim=0),torch.unsqueeze(audio_g,dim=0)],dim=0) #(4,1,29106)
+samplestwo = samplestwo.permute((1,0,2)).type(torch.cuda.DoubleTensor).repeat(controls.shape[0],1,1)#(16,4,29106)
+
+samplestwo.requires_grad = False"""
+
+def test(i):
     
-def pyfluidsynth_sampler(controls, samples): #(16,1,4)
+    notes=[47,44,42,40]
+    for j in range(len(notes)):
+        fs.noteon(0, notes[j], 120) #channel, pitch, velocity
+        s = fs.get_samples(int(14553.0))
+        audio_d = torch.tensor([s.astype(np.float32, order='C') / 32768.0]) 
+        fs.noteoff(0, notes[j])
+        pdb.set_trace()
+        sf.write("../data/musicfiles/note_" + str(j) + "_iter_" + str(i) + ".wav", audio_d.permute(1,0).cpu().detach().numpy(), 44100)
 
-    output=controls*torch.tensor([47,44,42,40]).cuda()
-    nonzero = output.nonzero()
-    total = []
-    for i in range(len(nonzero)):
-        note = int(output[nonzero[i][0],nonzero[i][1],nonzero[i][2]].item())
-        fs.noteon(0, note, 120) #channel, pitch, velocity
-        audionote = torch.unsqueeze(torch.tensor([fs.get_samples(int(44100 *0.05))]),dim=0)
-        total.append(audionote)
-    total = torch.cat(total,dim=0)
-    pdb.set_trace()
-    return total#synthesized_audio
+def pyfluidsynth_sampler(controls): #(16,1,4)
+   
+    notes=[47,44,42,40]
+    fs.noteon(0, notes[0], 120) #channel, pitch, velocity
+    s = fs.get_samples(int(14553.0))
+    audio_d = torch.tensor([s.astype(np.float32, order='C') / 32768.0]) 
+    fs.noteoff(0, notes[0])
+
+    fs.noteon(0, notes[1], 120) #channel, pitch, velocity
+    s = fs.get_samples(int(14553.0))
+    audio_b=torch.tensor([s.astype(np.float32, order='C') / 32768.0])
+    fs.noteoff(0, notes[1])
+
+    fs.noteon(0, notes[2], 120) #channel, pitch, velocity
+    s = fs.get_samples(int(14553.0))
+    audio_a = torch.tensor([s.astype(np.float32, order='C') / 32768.0])  
+    fs.noteoff(0, notes[2])
+
+    fs.noteon(0, notes[3], 120) #channel, pitch, velocity
+    s = fs.get_samples(int(14553.0))
+    audio_g = torch.tensor([s.astype(np.float32, order='C') / 32768.0]) 
+    fs.noteoff(0, notes[3])
+
+    samplestwo = torch.cat([torch.unsqueeze(audio_d,dim=0),torch.unsqueeze(audio_b,dim=0),
+        torch.unsqueeze(audio_a,dim=0),torch.unsqueeze(audio_g,dim=0)],dim=0) #(4,1,29106)
+    samplestwo = samplestwo.permute((1,0,2)).type(torch.cuda.DoubleTensor).repeat(controls.shape[0],1,1)#(16,4,29106)
+
+    samplestwo.requires_grad = False
+
+    synthesized_audio = sampler(controls,samplestwo)
+        
+    return synthesized_audio, samplestwo
+
 
 def sampler(controls, samples): #(16,1,4)
     sampled = torch.bmm(controls,
@@ -59,43 +116,51 @@ def get_melspec(audio):
     log_mel_spec_concat = torch.log10(torch.clamp(mel_output, min=1e-5))#(1,128,529)
     return log_mel_spec_concat
 
-def synthesize(path_to_musicfiles, controls):
+def synthesize(path_to_musicfiles, controls, pyfluidsynth):
     """This function returns the synthesized audio from the given matrix. 
     It also returns the samples used to do that. This is useful because later we will want a samples 
     matrix that has the same first dimension as the controls matrix, as thats what gets given to 
     the sampler. So synthesize is now used to generate the ground truth, but the samples generated are 
     reapplied at inference time when the model has predicted its own controls"""
     list_of_notes = ["47.wav","44.wav","42.wav","40.wav"]
-    audio_d,sr = torchaudio.load(path_to_musicfiles + list_of_notes[0])
-    audio_b,sr = torchaudio.load(path_to_musicfiles + list_of_notes[1])
-    audio_a,sr = torchaudio.load(path_to_musicfiles + list_of_notes[2])
-    audio_g,sr = torchaudio.load(path_to_musicfiles + list_of_notes[3])
-    samples = torch.cat([torch.unsqueeze(audio_d,dim=0),torch.unsqueeze(audio_b,dim=0),
-    torch.unsqueeze(audio_a,dim=0),torch.unsqueeze(audio_g,dim=0)],dim=0) #(4,1,29106)
-    samples = samples.permute((1,0,2)).type(torch.cuda.DoubleTensor).repeat(controls.shape[0],1,1)#(16,4,29106)
-   
-    resynthesized = sampler(torch.unsqueeze(controls,dim=1),samples) 
 
-    samples.requires_grad = False
-    return resynthesized, samples
+
+    if not pyfluidsynth > 0: 
+        audio_d,sr = torchaudio.load(path_to_musicfiles + list_of_notes[0])
+        audio_b,sr = torchaudio.load(path_to_musicfiles + list_of_notes[1])
+        audio_a,sr = torchaudio.load(path_to_musicfiles + list_of_notes[2])
+        audio_g,sr = torchaudio.load(path_to_musicfiles + list_of_notes[3])
+        samples = torch.cat([torch.unsqueeze(audio_d,dim=0),torch.unsqueeze(audio_b,dim=0),
+        torch.unsqueeze(audio_a,dim=0),torch.unsqueeze(audio_g,dim=0)],dim=0) #(4,1,29106
+        samples = samples.permute((1,0,2)).type(torch.cuda.DoubleTensor).repeat(controls.shape[0],1,1)#(16,4,29106)
+        samples.requires_grad = False
+        resynthesized = sampler(torch.unsqueeze(controls,dim=1),samples) 
+        return resynthesized, samples
+   
+    else:
+        resynthesized, samples = pyfluidsynth_sampler(torch.unsqueeze(controls,dim=1)) 
+        return resynthesized, samples
 
 class FunctionWithNumericalGrad(torch.autograd.Function):
     
     @staticmethod
-    def forward(cxt, synth_params, samples, epsilon, num_avg):
-        cxt.save_for_backward(synth_params,samples, epsilon, num_avg)
+    def forward(cxt, synth_params, samples, epsilon, num_avg,pyfluidsynth):
+        cxt.save_for_backward(synth_params,samples, epsilon, num_avg,pyfluidsynth)
         # do forward process
-        synth_signal = sampler(synth_params, samples)
+        if pyfluidsynth.cuda() > torch.tensor([0.0]).cuda():
+            synth_signal = pyfluidsynth_sampler(synth_params, samples)
+        else:
+            synth_signal = sampler(synth_params, samples)
 
         return synth_signal
 
     @staticmethod
     def backward(cxt, grad_output): 
-
         synth_params = cxt.saved_tensors[0]
         samples = cxt.saved_tensors[1].cuda()
         epsilon = cxt.saved_tensors[2].cuda()
         num_avg = cxt.saved_tensors[3][0]
+        pyfluidsynth = cxt.saved_tensors[4][0].cuda()
 
         # generate random vector of +-1s, #delta_k = rademacher(synth_params.shape).numpy()
         list_of_grads = []
@@ -107,8 +172,12 @@ class FunctionWithNumericalGrad(torch.autograd.Function):
             # synth +- forward and backward passes
             updated_plus = torch.min(synth_params + epsilon*delta_k, torch.tensor([1.0]).cuda())
             updated_minus = torch.max(synth_params - epsilon*delta_k, torch.tensor([0.0]).cuda())
-            J_plus = sampler(updated_plus, samples)
-            J_minus = sampler(updated_minus, samples) 
+            if pyfluidsynth > torch.tensor([0.0]).cuda():
+                J_plus = pyfluidsynth_sampler(updated_plus)
+                J_minus = pyfluidsynth_sampler(updated_minus) 
+            else:
+                J_plus = sampler(updated_plus, samples)
+                J_minus = sampler(updated_minus, samples) 
             grad_synth = J_plus - J_minus 
 
             grad_synth = grad_synth.reshape(-1)
@@ -119,20 +188,19 @@ class FunctionWithNumericalGrad(torch.autograd.Function):
             for sub_p_idx in range(len(delta_k)):
                 grad_s = grad_synth / (2 * epsilon * delta_k[sub_p_idx])
                 params_sublist.append(torch.sum(grad_output[0] * grad_s))
-        
-            
 
             grad_synth = torch.tensor(params_sublist).reshape(synth_params.shape)
             list_of_grads.append(torch.unsqueeze(grad_synth,dim=0))
 
         grad_synth = torch.mean(torch.cat(list_of_grads),axis=0).cuda()
+        
 
-        return grad_synth, None, None, None
+        return grad_synth, None, None, None, None
 
 
 def train():
 
-    log_wandb = False
+    log_wandb = True
    
     theconfig = {"epsilon": 0.001, 
     "num_notes": 16, 
@@ -143,8 +211,9 @@ def train():
     "apply_softmax": False,
     "apply_sigmoid": True,
     "apply_gumbelsoftmax" : False,
-    "real_gradient": False,
+    "real_gradient": True,
     "freq_version": False,
+    "pyfluidsynth": 1.0,
     "reshape_version": True,
     "avgpool_version": False,
     "num_iterations": 6000}
@@ -155,6 +224,7 @@ def train():
         config = wandb.config
         num_notes= int(config.num_notes)
         num_avg=int(config.num_avg)
+        pyfluidsynth=config.pyfluidsynth
         epsilon=config.epsilon
         recurrent = config.recurrent
         apply_gumbelsoftmax = config.apply_gumbelsoftmax
@@ -177,6 +247,7 @@ def train():
         apply_gumbelsoftmax=config["apply_gumbelsoftmax"]
         epsilon=config["epsilon"]
         recurrent = config["recurrent"]
+        pyfluidsynth = config["pyfluidsynth"]
         freq_version = config["freq_version"]
         reshape_version = config["reshape_version"]
         avgpool_version=config["avgpool_version"]
@@ -193,8 +264,11 @@ def train():
         [0,0,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0],[1,0,0,0],
         [1,0,0,0],[1,0,0,0],[1,0,0,0]]).type(torch.cuda.DoubleTensor)
     
+    if not os.path.isdir("reconstruction"):
+        os.mkdir("reconstruction")
  
-    resynthesized_mary, samples = synthesize("../data/musicfiles/", ground_truth[:num_notes])
+    resynthesized_mary,samples = synthesize("../data/musicfiles/", ground_truth[:num_notes],pyfluidsynth)
+
     log_mel_spec_mary = get_melspec(resynthesized_mary.type(torch.cuda.FloatTensor))
 
     if log_wandb: 
@@ -214,19 +288,18 @@ def train():
     loss = torch.nn.MSELoss()
     current_loss = torch.tensor([10000.0]).cuda()
 
-    if not os.path.isdir("reconstruction"):
-        os.mkdir("reconstruction")
-
     for k in range(num_iterations): 
         print(k)
         
         optimizer.zero_grad()
         
         if recurrent: 
-            list_of_audio=[]   
+            list_of_audio=[]
+            list_of_audio_gt=[]   
             list_of_controls=[]        
             for j in range(num_notes):
-                thenote, samples = synthesize("../data/musicfiles/", torch.unsqueeze(ground_truth[j],dim=0))
+                thenote, samples = synthesize("../data/musicfiles/", torch.unsqueeze(ground_truth[j],dim=0),pyfluidsynth)
+                list_of_audio_gt.append(thenote)
                 log_mel_spec_note = get_melspec(thenote.type(torch.cuda.FloatTensor))
                 controls = model.extract_features(torch.unsqueeze(log_mel_spec_note,dim=0).cuda())[0]
                 if freq_version:
@@ -243,13 +316,14 @@ def train():
                 if real_gradient:
                     curr_audio = sampler(controls, samples)
                 else:
-                    curr_audio = FunctionWithNumericalGrad.apply(controls, samples, torch.tensor([epsilon],requires_grad=False), torch.tensor([num_avg],requires_grad=False))
+                    curr_audio = FunctionWithNumericalGrad.apply(controls, samples, torch.tensor([epsilon],requires_grad=False), torch.tensor([num_avg],requires_grad=False),torch.tensor([pyfluidsynth],requires_grad=False))
             
                 list_of_audio.append(curr_audio)
                 list_of_controls.append(controls)
                 
             controls = torch.cat(list_of_controls,dim=0) #(16,1,4)
             synthesized_audio = torch.cat(list_of_audio,dim=1)
+            synthesized_audio_gt = torch.cat(list_of_audio_gt,dim=1)
         
         else: 
             controls = model.extract_features(torch.unsqueeze(log_mel_spec_mary,dim=0))[0] #(4,1,16)
@@ -270,9 +344,10 @@ def train():
                 #pdb.set_trace()
                 synthesized_audio = sampler(controls, samples)
             else:
-                synthesized_audio = FunctionWithNumericalGrad.apply(controls, samples, torch.tensor([epsilon]), torch.tensor([num_avg]))
+                synthesized_audio = FunctionWithNumericalGrad.apply(controls, samples, torch.tensor([epsilon]), torch.tensor([num_avg]),torch.tensor([pyfluidsynth],requires_grad=False))
 
         log_mel_spec_concat = get_melspec(synthesized_audio)
+        log_mel_spec_mary = get_melspec(synthesized_audio_gt)
 
         if log_wandb and k%20==0:
                 wandb.log({"predicted pitch-time":wandb.Table(data=controls[:,0,:].detach().cpu().tolist(), columns=["47","44","42","40"])})
@@ -283,7 +358,6 @@ def train():
         
         loss_val = loss(log_mel_spec_concat,log_mel_spec_mary)
         loss_val.backward()
-
         optimizer.step()
         
         if log_wandb: 
@@ -298,3 +372,4 @@ def train():
             current_loss = loss_val"""
 
 train()
+#test(1)

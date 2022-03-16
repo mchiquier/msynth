@@ -1,2 +1,5 @@
 tests/rendered_audio
 soundfonts/piano.sf2
+tests/wandb
+msynth/wandb
+data
