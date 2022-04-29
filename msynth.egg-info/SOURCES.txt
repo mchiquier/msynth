@@ -2,6 +2,10 @@ LICENSE.txt
 README.md
 setup.py
 msynth/__init__.py
+msynth/argscode.py
+msynth/loss_single.py
+msynth/train.py
+msynth/train_pipeline_single.py
 msynth/version.py
 msynth.egg-info/PKG-INFO
 msynth.egg-info/SOURCES.txt

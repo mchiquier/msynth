@@ -3,3 +3,5 @@ soundfonts/piano.sf2
 tests/wandb
 msynth/wandb
 data
+*.pyc
+soundfonts/*

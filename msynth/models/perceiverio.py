@@ -9,41 +9,6 @@ import torch
 import utils
 
 
-class MyAnalysisModel(torch.nn.Module):
-    '''
-    Converts audio waveforms to control matrix representations.
-    '''
-
-    def __init__(self, logger, num_samples, num_controls, num_timecells, samples_per_frame,
-                 output_pos_enc):
-        '''
-        :param num_samples (int) = S: Waveform length.
-        :param num_controls (int) = C: Number of event control types (e.g. pitches for instruments).
-        :param num_timecells (int) = T: Discretized duration of control matrix.
-        '''
-        super().__init__()
-        self.logger = logger
-        self.num_samples = num_samples
-        self.num_controls = num_controls
-        self.num_timecells = num_timecells
-        self.samples_per_frame = samples_per_frame
-
-        self.model = pb.MyPerceiverBackbone(
-            logger, (num_samples, ), (num_timecells,num_controls), samples_per_frame,
-            output_pos_enc) 
-
-    def forward(self, waveform):
-        '''
-        :param waveform (B, S) tensor.
-        :return (control_matrix, control_matrix).
-            control_matrix (B, C, T) tensor.
-            last_hidden_state (B, L, D) tensor.
-        '''
-
-        (control_matrix, last_hidden_state) = self.model(waveform)
-
-        return (control_matrix, last_hidden_state)
-
 class MySpecAnalysisModel(torch.nn.Module):
     '''
     Converts audio waveforms to control matrix representations.

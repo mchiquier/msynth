@@ -48,7 +48,7 @@ def shared_args(parser):
                         help='Path to parent collection of checkpoint folders.')
     parser.add_argument('--log_root', default='logs/', type=str,
                         help='Path to parent collection of logs, visualizations, and results.')
-    parser.add_argument('--name', '--tag', default='v1', type=str,
+    parser.add_argument('--name', '--tag', default='tmp1', type=str,
                         help='Recognizable, unique tag of this experiment for bookkeeping. A good '
                         'practice would be to include a version number.')
     parser.add_argument('--resume', '--checkpoint_name', default='', type=str,
