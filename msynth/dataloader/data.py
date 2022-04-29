@@ -258,7 +258,7 @@ class MyRandomFMDataset(torch.utils.data.Dataset):
         print(melspec.shape)
         melspec = melspec - torch.min(melspec)
         melspec = melspec/torch.max(melspec)
-        data_retval['mel_spec'] = (torch.ones(melspec.shape)*self.carrier_note).numpy() #"""mellspec #(
+        data_retval['mel_spec'] = melspec #(torch.ones(melspec.shape)*self.carrier_note).numpy() #"""mellspec #(
 
         return data_retval
 
