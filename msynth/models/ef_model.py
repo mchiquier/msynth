@@ -313,11 +313,9 @@ class EfficientNet(nn.Module):
 
         # Head
         x = self._swish(self._bn1(self._conv_head(x)))
+        pdb.set_trace()
         
         if self.reshapeversion:
-            #pdb.set_trace()
-            #x = x.transpose(1, 2).flatten(-2)    
-            #print(x.shape)  
             x=x.reshape(1,-1)      
             x = self._fcfinal(x)
             #pdb.set_trace()
@@ -325,6 +323,7 @@ class EfficientNet(nn.Module):
             return torch.unsqueeze(torch.unsqueeze(x,dim=2),dim=3)
         if self.freqversion:
             #x=self._avg_pooling2(x)
+            
             x=self._conv_1by1(x)
             return x
         if self.avgpoolversion:
@@ -345,11 +344,6 @@ class EfficientNet(nn.Module):
         # Convolution layers
         x = self.extract_features(inputs)
         # Pooling and final linear layer
-        x = self._avg_pooling(x)
-        if self._global_params.include_top:
-            x = x.flatten(start_dim=1)
-            x = self._dropout(x)
-            x = self._fc(x)
         return x
 
     @classmethod

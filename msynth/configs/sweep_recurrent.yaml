@@ -1,4 +1,4 @@
-program: gradapprox.py
+program: train.py
 method: random
 metric:
   name: loss
@@ -11,6 +11,6 @@ parameters:
   num_notes:
     values: [16]
   learning_rate:
-      values: [0.01,0.001]
+      values: [0.01,0.001, 0.0001]
   recurrent:
       values: [true]
