@@ -1,8 +1,12 @@
-# https://github.com/github/gitignore/blob/master/Python.gitignore
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+# Custom.
+.vscode/settings.json
+checkpoints/
+checkpoints_*/
+logs/
+logs_*/
+wandb/
+*.egg-info
+soundfonts/
 
 # Mac / Jetbrain specific ignores
 .idea
@@ -10,16 +14,25 @@ __pycache__/
 *.DS_Store
 src/models
 
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
 # C extensions
 *.so
 
 # Distribution / packaging
 .Python
+build/
 develop-eggs/
 dist/
 downloads/
 eggs/
 .eggs/
+lib/
+lib64/
 parts/
 sdist/
 var/
@@ -51,6 +64,7 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
+*.py,cover
 .hypothesis/
 .pytest_cache/
 
@@ -94,8 +108,12 @@ ipython_config.py
 #   install all needed dependencies.
 #Pipfile.lock
 
-# celery beat schedule file
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow
+__pypackages__/
+
+# Celery stuff
 celerybeat-schedule
+celerybeat.pid
 
 # SageMath parsed files
 *.sage.py
